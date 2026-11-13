@@ -237,8 +237,7 @@ def main():
     config = OmegaConf.load(sys.argv[1])
     os.makedirs(config.output_dir, exist_ok=True)
     OmegaConf.save(config, os.path.join(config.output_dir, "config.yaml"))
-    print("#" * 40, OmegaConf.to_yaml(config).strip(), "#" * 40, sep="
-")
+    print("#" * 40, OmegaConf.to_yaml(config).strip(), "#" * 40, sep="")
     wandb.init(project="llms-hw2", config=OmegaConf.to_container(config))
 
     # initialize tokenizer and model
