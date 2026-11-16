@@ -1,0 +1,15 @@
+output_dir: outputs/tune-2
+tokenizer_encoding: gpt2
+model_config:
+  n_embd: 24
+  n_head: 2
+  n_positions: 128
+  n_layer: 2
+device: auto
+batch_size: 24
+seq_len: 96
+num_warmup_steps: 10
+num_training_steps: 1500
+grad_accumulation_steps: 1
+min_lr: 1e-4
+max_lr: 5e-4
