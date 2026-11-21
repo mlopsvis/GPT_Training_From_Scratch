@@ -247,18 +247,14 @@ def main():
     print(f"model parameters = {count_params(model) / 1e6:.0f}M")
 
     model_disk_size_MB = estimate_model_disk_size(model) * 1e-6
-    if model_disk_size_MB > 98:
-        print(
-            f"[red]WARNING: your model is {model_disk_size_MB:.1f}MB. "
-            "The largest model size allowed by GradeScope is 100MB, "
-            "and you may have trouble with submitting the assignment. "
-            "Please update your config so your model is at most 100 MB.[/red]"
+    if model_disk_size_MB > 95:
+        raise RuntimeError(
+            f"Model is {model_disk_size_MB:.1f}MB, which exceeds the 95MB checkpoint budget. "
+            "Reduce model size or training config before uploading."
         )
-    else:
-        print(
-            f"Your model is {model_disk_size_MB:.1f}MB. This should be within "
-            "the 100MB limit of Gradescope."
-        )
+    print(
+        f"Your model is {model_disk_size_MB:.1f}MB. This is within the 95MB checkpoint budget."
+    )
 
     # prepare data and data generator
     assert config.seq_len <= config.model_config.n_positions
@@ -319,17 +315,27 @@ def main():
         config.grad_accumulation_steps,
     )
 
-    # save the trained model
-    model_path = os.path.join(config.output_dir, "model.pt")
-    torch.save(model.state_dict(), model_path)
-    print(f"model saved to {model_path}")
-
-    # evaluation
+    # evaluation first so the checkpoint can include validation metrics
     model.eval()
     eval_results = evaluate(model, val_sampler, autocast)
     print("evaluation results:", json.dumps(eval_results))
     with open(os.path.join(config.output_dir, "eval.json"), "w") as f:
         json.dump(eval_results, f, indent=2)
+
+    # save the trained model checkpoint under the 95MB submission budget
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "config": OmegaConf.to_container(config, resolve=True),
+        "eval_results": eval_results,
+        "model_size_mb": estimate_model_disk_size(model) * 1e-6,
+    }
+    model_path = os.path.join(config.output_dir, "model.pt")
+    checkpoint_path = os.path.join(config.output_dir, "checkpoint.pt")
+
+    torch.save(checkpoint, checkpoint_path)
+    torch.save(model.state_dict(), model_path)
+    print(f"checkpoint saved to {checkpoint_path}")
+    print(f"model saved to {model_path}")
     print("done!")
 
 
