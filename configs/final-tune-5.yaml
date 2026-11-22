@@ -11,6 +11,6 @@ batch_size: 32
 seq_len: 256
 grad_accumulation_steps: 8
 num_warmup_steps: 311
-num_training_steps: 10500
+num_training_steps: 10360
 min_lr: 1e-4
 max_lr: 2.5e-3
