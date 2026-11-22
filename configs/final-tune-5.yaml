@@ -3,13 +3,14 @@ tokenizer_encoding: gpt2
 model_config:
   n_embd: 320
   n_head: 10
-  n_positions: 96
-  n_layer: 5
+  n_positions: 256
+  n_layer: 6
+  p_dropout: 0.0
 device: auto
 batch_size: 32
-seq_len: 64
-num_warmup_steps: 100
-num_training_steps: 180000
-grad_accumulation_steps: 2
+seq_len: 256
+grad_accumulation_steps: 8
+num_warmup_steps: 311
+num_training_steps: 10500
 min_lr: 1e-4
-max_lr: 5e-4
+max_lr: 2.5e-3
