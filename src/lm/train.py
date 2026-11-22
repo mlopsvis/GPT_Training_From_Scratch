@@ -150,7 +150,7 @@ def train(
     grad_accumulation_steps: int = 1,
     start_step: int = 0,
     checkpoint_dir: str | None = None,
-    checkpoint_interval: int = 500,
+    checkpoint_interval: int = 5000,
     config: dict | None = None,
 ) -> None:
     """Train the model, periodically saving resumable checkpoints."""
@@ -193,15 +193,9 @@ def train(
                 "step": step + 1,
                 "config": config,
             }
-            checkpoint_path = os.path.join(
-                checkpoint_dir, f"checkpoint-{step + 1}.pt"
-            )
-            torch.save(checkpoint, checkpoint_path)
-            torch.save(checkpoint, os.path.join(checkpoint_dir, "checkpoint-latest.pt"))
-            print(
-                f"saved checkpoint to {checkpoint_path} "
-                f"and checkpoint-latest.pt"
-            )
+            latest_path = os.path.join(checkpoint_dir, "checkpoint-latest.pt")
+            torch.save(checkpoint, latest_path)
+            print(f"saved latest checkpoint to {latest_path}")
 
 
 @torch.inference_mode()
@@ -328,7 +322,7 @@ def main():
         config.grad_accumulation_steps,
         start_step=start_step,
         checkpoint_dir=config.output_dir,
-        checkpoint_interval=500,
+        checkpoint_interval=5000,
         config=OmegaConf.to_container(config, resolve=True),
     )
 
