@@ -148,40 +148,27 @@ def train(
     autocast: torch.autocast | nullcontext = nullcontext(),
     num_training_steps: int = 0,
     grad_accumulation_steps: int = 1,
+    start_step: int = 0,
+    checkpoint_dir: str | None = None,
+    checkpoint_interval: int = 500,
+    config: dict | None = None,
 ) -> None:
-    """A training loop for the language model
-
-    Args:
-        model: the decoder LM
-        batch_sampler: a generator that produces batches of token ids
-        optimizer: an optimizer for gradient update
-        lr_schedule: a callable that produces the learning at a step number
-        autocast: a context manager that handles tensor casting (you do not need
-          to care about this for your implementation)
-        num_training_steps: number of steps to train for
-        grad_accumulation_steps: number of "micro" training steps before each
-          gradient update
-    """
-    # stores training losses for the 20 latest steps
+    """Train the model, periodically saving resumable checkpoints."""
     losses = deque(maxlen=20 * grad_accumulation_steps)
 
-    for step in (pbar := trange(num_training_steps)):
+    for step in trange(start_step, num_training_steps):
         t0 = time.time()
-        lr = lr_schedule(step)
-        set_lr(optimizer, lr)
-
+        set_lr(optimizer, lr_schedule(step))
         optimizer.zero_grad()
+
         for _ in range(grad_accumulation_steps):
-            # TODO: sample a batch, generate logits and compute loss
             input_ids = next(batch_sampler)
             with autocast:
                 logits = model(input_ids)
                 loss = compute_language_modeling_loss(input_ids, logits)
             (loss / grad_accumulation_steps).backward()
-            loss_f = loss.item()
-            losses.append(loss_f)
+            losses.append(loss.item())
 
-        # TODO: update the model using the accumulated gradients
         optimizer.step()
         loss_mean = np.mean(losses).item()
 
@@ -191,16 +178,30 @@ def train(
             * input_ids.shape[1]
             * grad_accumulation_steps
         )
-        t1 = time.time()
-        dt = t1 - t0
-        t0 = t1
-        pbar.set_postfix(
-            {
-                "train loss": f"{loss_mean:.2f}",
-                "TFLOPS": f"{FLOPs_per_step / dt / 1e12:.1f}",
-            }
+        dt = time.time() - t0
+
+        wandb.log(
+            {"train-loss": loss_mean, "learning-rate": lr_schedule(step)},
+            step=step,
         )
-        wandb.log({"train-loss": loss_mean, "learning-rate": lr}, step=step)
+
+        if checkpoint_dir is not None and (step + 1) % checkpoint_interval == 0:
+            os.makedirs(checkpoint_dir, exist_ok=True)
+            checkpoint = {
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "step": step + 1,
+                "config": config,
+            }
+            checkpoint_path = os.path.join(
+                checkpoint_dir, f"checkpoint-{step + 1}.pt"
+            )
+            torch.save(checkpoint, checkpoint_path)
+            torch.save(checkpoint, os.path.join(checkpoint_dir, "checkpoint-latest.pt"))
+            print(
+                f"saved checkpoint to {checkpoint_path} "
+                f"and checkpoint-latest.pt"
+            )
 
 
 @torch.inference_mode()
@@ -303,6 +304,18 @@ def main():
         if device == "cuda"
         else nullcontext()
     )
+
+    # Training with resumable checkpoints. Pass an optional third argument:
+    # python src/lm/train.py config.yaml outputs/.../checkpoint-latest.pt
+    start_step = 0
+    resume_path = sys.argv[2] if len(sys.argv) > 2 else None
+    if resume_path:
+        resume_checkpoint = torch.load(resume_path, map_location=device)
+        model.load_state_dict(resume_checkpoint["model_state_dict"])
+        optimizer.load_state_dict(resume_checkpoint["optimizer_state_dict"])
+        start_step = resume_checkpoint["step"]
+        print(f"resumed from {resume_path} at step {start_step}")
+
     # training
     model.train()
     train(
@@ -313,6 +326,10 @@ def main():
         autocast,
         config.num_training_steps,
         config.grad_accumulation_steps,
+        start_step=start_step,
+        checkpoint_dir=config.output_dir,
+        checkpoint_interval=500,
+        config=OmegaConf.to_container(config, resolve=True),
     )
 
     # evaluation first so the checkpoint can include validation metrics
