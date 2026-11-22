@@ -322,7 +322,7 @@ def main():
         config.grad_accumulation_steps,
         start_step=start_step,
         checkpoint_dir=config.output_dir,
-        checkpoint_interval=5000,
+        checkpoint_interval=400,
         config=OmegaConf.to_container(config, resolve=True),
     )
 
