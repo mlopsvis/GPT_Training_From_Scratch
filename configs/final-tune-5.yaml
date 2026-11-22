@@ -8,8 +8,8 @@ model_config:
 device: auto
 batch_size: 32
 seq_len: 64
-num_warmup_steps: 10
-num_training_steps: 180000
+num_warmup_steps: 100
+num_training_steps: 2190000
 grad_accumulation_steps: 2
 min_lr: 1e-4
 max_lr: 5e-4
